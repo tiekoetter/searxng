@@ -16,6 +16,8 @@ general:
   # leave empty to disable (no password set)
   # open_metrics: <password>
   open_metrics: ''
+  legal_name: ""
+  legal_url:
 
 brand:
   new_issue_url: https://github.com/searxng/searxng/issues/new
@@ -29,6 +31,9 @@ brand:
   #   links:
   #     Uptime: https://uptime.searxng.org/history/darmarit-org
   #     About: "https://searxng.org"
+  website_name: ""
+  website_url:
+  donate_url:
 
 search:
   # Filter results. 0: None, 1: Moderate, 2: Strict
