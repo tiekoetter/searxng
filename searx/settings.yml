@@ -12,6 +12,8 @@ general:
   contact_url: false
   # record stats
   enable_metrics: true
+  legal_name: ""
+  legal_url:
 
 brand:
   new_issue_url: https://github.com/searxng/searxng/issues/new
@@ -19,6 +21,9 @@ brand:
   public_instances: https://searx.space
   wiki_url: https://github.com/searxng/searxng/wiki
   issue_url: https://github.com/searxng/searxng/issues
+  website_name: ""
+  website_url:
+  donate_url:
 
 search:
   # Filter results. 0: None, 1: Moderate, 2: Strict
