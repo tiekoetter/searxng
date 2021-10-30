@@ -68,6 +68,9 @@
         {% if get_setting('brand.public_instances') %}
         | <a href="{{ get_setting('brand.public_instances') }}">{{ _('Public instances') }}</a>
         {% endif %}
+        {% if get_setting('brand.website_url') and get_setting('brand.website_name') %} | <a href="{{ get_setting('brand.website_url') }}">{{ get_setting('brand.website_name') }}</a>{% endif %}
+        {% if get_setting('brand.donate_url') %} | <a href="{{ get_setting('brand.donate_url') }}">{{ _('Donate') }}</a>{% endif %}
+        {% if get_setting('general.legal_url') and get_setting('general.legal_name') %} | <a href="{{ get_setting('general.legal_url') }}">{{ get_setting('general.legal_name') }}</a>{% endif %}
         {% if get_setting('general.privacypolicy_url') %}
         | <a href="{{ get_setting('general.privacypolicy_url') }}">{{ _('Privacy policy') }}</a>
         {% endif %}
