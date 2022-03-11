@@ -68,7 +68,7 @@ google_domains = {
     'NZ': 'google.co.nz',  # New Zealand
     'PH': 'google.com.ph',  # Philippines
     'SG': 'google.com.sg',  # Singapore
-    'US': 'google.com',  # United States (google.us) redirects to .com
+    'US': 'google.de',  # United States (google.us) redirects to .com; Temp fix google.com.hk issue.
     'ZA': 'google.co.za',  # South Africa
     'AR': 'google.com.ar',  # Argentina
     'CL': 'google.cl',  # Chile
@@ -199,7 +199,7 @@ def get_lang_info(params, lang_list, custom_aliases, supported_any_language):
 
     # subdomain ...
 
-    ret_val['subdomain'] = 'www.' + google_domains.get(country.upper(), 'google.com')
+    ret_val['subdomain'] = 'www.google.de'
 
     # params & headers
 
