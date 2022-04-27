@@ -516,8 +516,17 @@ class Preferences:
             dict_data[x] = y[0]
         self.parse_dict(dict_data)
 
+    hostname_replace_choice = "off"
+
     def parse_dict(self, input_data: Dict[str, str]):
         """parse preferences from request (``flask.request.form``)"""
+
+        global hostname_replace_choice  # pylint: disable=global-variable-undefined
+        if 'hostname_replace' in ','.join(self.plugins.enabled):
+            hostname_replace_choice = "on"
+        else:
+            hostname_replace_choice = "off"
+
         for user_setting_name, user_setting in input_data.items():
             if user_setting_name in self.key_value_settings:
                 if self.key_value_settings[user_setting_name].locked:
