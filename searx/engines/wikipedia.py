@@ -8,6 +8,7 @@ from json import loads
 from lxml.html import fromstring
 from searx.utils import match_language, searx_useragent
 from searx.network import raise_for_httperror
+import re
 
 # about
 about = {
@@ -77,8 +78,16 @@ def response(resp):
     if api_result.get('type') != 'standard':
         return []
 
+    from searx.preferences import hostname_replace_choice
+
     title = api_result['title']
     wikipedia_link = api_result['content_urls']['desktop']['page']
+    if hostname_replace_choice == "on":
+        wikipedia_link = (
+            re.sub('(.*\.)wikipedia\.org', 'https://wikiless.tiekoetter.com', wikipedia_link)
+            + "?lang="
+            + api_result['content_urls']['desktop']['page'][8:10]
+        )
 
     results.append({'url': wikipedia_link, 'title': title})
 
