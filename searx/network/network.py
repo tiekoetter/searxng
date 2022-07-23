@@ -318,13 +318,6 @@ def get_network(name: str | None = None) -> "Network":
 def check_network_configuration():
     async def check():
         exception_count = 0
-        for network in NETWORKS.values():
-            if network.using_tor_proxy:
-                try:
-                    await network.get_client()
-                except Exception:  # pylint: disable=broad-except
-                    network._logger.exception('Error')  # pylint: disable=protected-access
-                    exception_count += 1
         return exception_count
 
     future = asyncio.run_coroutine_threadsafe(check(), get_loop())
