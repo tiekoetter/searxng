@@ -54,6 +54,7 @@ options:
 
 """
 
+import re
 import urllib.parse
 import babel
 
@@ -186,9 +187,17 @@ def response(resp):
 
     _network.raise_for_httperror(resp)
 
+    from searx.preferences import hostname_replace_choice  # pylint: disable=import-outside-toplevel
+
     api_result = resp.json()
     title = utils.html_to_text(api_result.get('titles', {}).get('display') or api_result.get('title'))
     wikipedia_link = api_result['content_urls']['desktop']['page']
+    if hostname_replace_choice == "on":
+        wikipedia_link = (
+            re.sub(r'(.*\.)wikipedia\.org', 'https://wikiless.tiekoetter.com', wikipedia_link)
+            + "?lang="
+            + api_result['content_urls']['desktop']['page'][8:10]
+        )
 
     if "list" in display_type or api_result.get('type') != 'standard':
         # show item in the result list if 'list' is in the display options or it
