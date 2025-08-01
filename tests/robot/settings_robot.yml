@@ -1,6 +1,8 @@
 general:
   debug: false
   instance_name: "searx_test"
+  legal_name: "test_legal"
+  legal_url: http://example.org/legal
 
 brand:
   git_url: https://github.com/searxng/searxng
@@ -10,6 +12,9 @@ brand:
   docs_url: https://docs.searxng.org
   public_instances: https://searx.space
   wiki_url: https://github.com/searxng/searxng/wiki
+  website_name: "test_website1"
+  website_url: http://example.org/website1
+  donate_url: http://example.org/website2
 
 search:
   language: "all"
