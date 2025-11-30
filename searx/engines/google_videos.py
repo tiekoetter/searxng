@@ -59,7 +59,7 @@ def request(query, params):
 
     query_url = (
         'https://'
-        + google_info['subdomain']
+        + 'www.google.com'
         + '/search'
         + "?"
         + urlencode(
