@@ -12,11 +12,14 @@ engines:
 """
 
 import typing as t
+from typing import Optional
 
 import re
 import random
 import string
 import time
+from time import monotonic
+from pathlib import Path
 from urllib.parse import urlencode
 from lxml import html
 import babel
@@ -33,6 +36,54 @@ from searx.result_types import EngineResults
 if t.TYPE_CHECKING:
     from searx.extended_types import SXNG_Response
     from searx.search.processors import OnlineParams
+
+### Google __Secure-ENID start
+
+SECURE_ENID_PATH = Path("/tmp/secure-enid.txt")
+_RELOAD_INTERVAL = 5.0
+
+
+class _SecureEnidLoader:  # pylint: disable=too-few-public-methods
+    def __init__(self, path: Path, reload_interval: float) -> None:
+        self._path = path
+        self._reload_interval = reload_interval
+        self._cached: Optional[str] = None
+        self._mtime: Optional[float] = None
+        self._last_check: float = 0.0
+
+    def _reload(self) -> None:
+        try:
+            text = self._path.read_text(encoding="utf-8").strip()
+            st = self._path.stat()
+        except (FileNotFoundError, PermissionError, OSError, UnicodeDecodeError):
+            self._cached = None
+            self._mtime = None
+            return
+
+        self._cached = text
+        self._mtime = st.st_mtime
+
+    def get(self) -> Optional[str]:
+        now = monotonic()
+        if now - self._last_check < self._reload_interval:
+            return self._cached
+        self._last_check = now
+
+        try:
+            st_mtime = self._path.stat().st_mtime
+        except (FileNotFoundError, PermissionError, OSError):
+            self._cached = None
+            self._mtime = None
+            return self._cached
+
+        if self._mtime is None or st_mtime != self._mtime:
+            self._reload()
+        return self._cached
+
+
+_SECURE_ENID = _SecureEnidLoader(SECURE_ENID_PATH, _RELOAD_INTERVAL)
+
+### Google __Secure-ENID end
 
 about = {
     "website": 'https://www.google.com',
@@ -322,6 +373,10 @@ def request(query: str, params: "OnlineParams") -> None:
     params['cookies'] = google_info['cookies']
     params['headers'].update(google_info['headers'])
 
+    secure_enid = _SECURE_ENID.get()
+    if secure_enid:
+        params['cookies']["__Secure-ENID"] = secure_enid
+
 
 # =26;[3,"dimg_ZNMiZPCqE4apxc8P3a2tuAQ_137"]a87;data:image/jpeg;base64,/9j/4AAQSkZJRgABA
 # ...6T+9Nl4cnD+gr9OK8I56/tX3l86nWYw//2Q==26;
@@ -521,7 +576,7 @@ def fetch_traits(engine_traits: EngineTraits, add_domains: bool = True):
             ]:
                 continue
             region = domain.split('.')[-1].upper()
-            engine_traits.custom['supported_domains'][region] = 'www' + domain  # type: ignore
+            engine_traits.custom['supported_domains'][region] = 'www.google.com'  # type: ignore
             if region == 'HK':
                 # There is no google.cn, we use .com.hk for zh-CN
-                engine_traits.custom['supported_domains']['CN'] = 'www' + domain  # type: ignore
+                engine_traits.custom['supported_domains']['CN'] = 'www.google.com'  # type: ignore
