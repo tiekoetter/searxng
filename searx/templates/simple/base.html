@@ -5,7 +5,7 @@
   <meta name="endpoint" content="{{ endpoint }}">
   <meta name="description" content="SearXNG — a privacy-respecting, open metasearch engine">
   <meta name="keywords" content="SearXNG, search, search engine, metasearch, meta search">
-  <meta name="generator" content="searxng/{{ searx_version }}">
+  <meta name="generator" content="searxng/{{ searx_version_custom }}">
   <meta name="referrer" content="no-referrer">
   <meta name="robots" content="noarchive">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -65,7 +65,7 @@
   </main>
   <footer>
     <p>
-    {{ _('Powered by') }} <a href="{{ url_for('info', pagename='about') }}">SearXNG</a> - {{ searx_version }} — {{ _('a privacy-respecting, open metasearch engine') }}<br>
+    {{ _('Powered by') }} <a href="{{ url_for('info', pagename='about') }}">SearXNG</a> - {{ searx_version_custom }} — {{ _('a privacy-respecting, open metasearch engine') }}<br>
         <a href="{{ searx_git_url }}">{{ _('Source code') }}</a>
         | <a href="{{ get_setting('brand.issue_url') }}">{{ _('Issue tracker') }}</a>
         {% if enable_metrics %}| <a href="{{ url_for('stats') }}">{{ _('Engine stats') }}</a>{% endif %}
@@ -82,6 +82,9 @@
         | <a href="{{ link }}">{{ _(title) }}</a>
         {% endfor %}
     </p>
+    <span aria-hidden="true" style="display:none;">
+      Contact: tinbox@tiekoetter.com
+    </span>
   </footer>
 </body>
 </html>

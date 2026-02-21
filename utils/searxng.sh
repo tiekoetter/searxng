@@ -943,11 +943,11 @@ EOF
    # - https://uwsgi-docs.readthedocs.io/en/latest/Systemd.html#one-service-per-app-in-systemd
 
    create:    ${uWSGI_APPS_ENABLED}/${SEARXNG_UWSGI_APP}
-   enable:    sudo -H systemctl enable   uwsgi@${SEARXNG_UWSGI_APP%.*}
-   start:     sudo -H systemctl start    uwsgi@${SEARXNG_UWSGI_APP%.*}
-   restart:   sudo -H systemctl restart  uwsgi@${SEARXNG_UWSGI_APP%.*}
-   stop:      sudo -H systemctl stop     uwsgi@${SEARXNG_UWSGI_APP%.*}
-   disable:   sudo -H systemctl disable  uwsgi@${SEARXNG_UWSGI_APP%.*}
+   enable:    sudo -H systemctl enable   searxng-uwsgi
+   start:     sudo -H systemctl start    searxng-uwsgi
+   restart:   sudo -H systemctl restart  searxng-uwsgi
+   stop:      sudo -H systemctl stop     searxng-uwsgi
+   disable:   sudo -H systemctl disable  searxng-uwsgi
 
 EOF
                     ;;

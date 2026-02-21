@@ -1327,12 +1327,12 @@ uWSGI_restart() {
         ubuntu-* | debian-*)
             # the 'service' method seems broken in that way, that it (re-)starts
             # the whole uwsgi process.
-            service uwsgi restart "${CONF%.*}"
+            service searxng-uwsgi restart
             ;;
         arch-*)
             # restart systemd template instance
             if uWSGI_app_available "${CONF}"; then
-                systemctl restart "uwsgi@${CONF%.*}"
+                systemctl restart searxng-uwsgi
             else
                 info_msg "[uWSGI:systemd-template] ${CONF} not installed (no need to restart)"
             fi

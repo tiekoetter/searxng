@@ -44,7 +44,6 @@ max_page = 50
 
 time_range_support = True
 safesearch = True
-send_accept_language_header = True
 
 filter_mapping = {0: 'images', 1: 'active', 2: 'active'}
 
@@ -56,7 +55,7 @@ def request(query, params):
 
     query_url = (
         'https://'
-        + google_info['subdomain']
+        + 'www.google.com'
         + '/search'
         + '?'
         + urlencode({'q': query, 'tbm': "isch", **google_info['params'], 'asearch': 'isch'})

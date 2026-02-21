@@ -511,7 +511,7 @@ def fetch_traits(engine_traits: EngineTraits, add_domains: bool = True):
             ]:
                 continue
             region = domain.split('.')[-1].upper()
-            engine_traits.custom['supported_domains'][region] = 'www' + domain  # type: ignore
+            engine_traits.custom['supported_domains'][region] = 'www.google.com'  # type: ignore
             if region == 'HK':
                 # There is no google.cn, we use .com.hk for zh-CN
-                engine_traits.custom['supported_domains']['CN'] = 'www' + domain  # type: ignore
+                engine_traits.custom['supported_domains']['CN'] = 'www.google.com'  # type: ignore
