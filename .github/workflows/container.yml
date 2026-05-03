@@ -18,14 +18,14 @@ concurrency:
 
 permissions:
   contents: read
-  packages: read
+  packages: write
 
 env:
   PYTHON_VERSION: "3.14"
 
 jobs:
   build:
-    if: github.repository_owner == 'searxng' || github.event_name == 'workflow_dispatch'
+    if: github.repository_owner == 'tiekoetter' || github.event_name == 'workflow_dispatch'
     name: Build (${{ matrix.arch }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -163,7 +163,7 @@ jobs:
         run: make container.test
 
   release:
-    if: github.repository_owner == 'searxng' && github.ref_name == 'master'
+    if: github.repository_owner == 'tiekoetter' && github.ref_name == 'master'
     name: Release
     runs-on: ubuntu-24.04-arm
     needs:
@@ -185,13 +185,6 @@ jobs:
           registry: "ghcr.io"
           username: "${{ github.repository_owner }}"
           password: "${{ secrets.GITHUB_TOKEN }}"
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121  # v4.1.0
-        with:
-          registry: "docker.io"
-          username: "${{ secrets.DOCKER_USER }}"
-          password: "${{ secrets.DOCKER_TOKEN }}"
 
       - name: Release
         env:
