@@ -600,6 +600,18 @@ def health():
     return Response('OK', mimetype='text/plain')
 
 
+@app.route('/captcha', methods=['GET', 'POST'], endpoint='captcha')
+def captcha_view():
+    from searx.captcha import captcha as captcha_page  # pylint: disable=import-outside-toplevel
+
+    captcha_response = captcha_page(  # pylint: disable=assignment-from-none
+        sxng_request, settings['server']['secret_key']
+    )
+    if captcha_response:
+        return captcha_response
+    return render('captcha.html')
+
+
 @app.route('/client<token>.css', methods=['GET', 'POST'])
 def client_token(token=None):
     link_token.ping(sxng_request, token)
@@ -650,6 +662,14 @@ def search():
         search_query, raw_text_query, _, _, selected_locale = get_search_query_from_webapp(
             sxng_request.preferences, sxng_request.form
         )
+        from searx.captcha import handle_captcha  # pylint: disable=import-outside-toplevel
+
+        captcha_response = handle_captcha(  # pylint: disable=assignment-from-none
+            sxng_request, settings['server']['secret_key'], raw_text_query, search_query, selected_locale
+        )
+        if captcha_response:
+            return captcha_response
+
         search_obj = searx.search.SearchWithPlugins(search_query, sxng_request, sxng_request.user_plugins)
         result_container = search_obj.search()
 
