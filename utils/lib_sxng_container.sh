@@ -277,7 +277,7 @@ container.push() {
         podman image list
 
         # Remote registries
-        release_registries=("ghcr.io" "docker.io")
+        release_registries=("ghcr.io")
 
         # Push manifests
         for registry in "${release_registries[@]}"; do
