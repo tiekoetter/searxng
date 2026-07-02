@@ -2,8 +2,10 @@
 # pylint: disable=missing-module-docstring,disable=missing-class-docstring,invalid-name
 
 import json
+import importlib
 import babel
 from mock import Mock
+from flask.wrappers import Response
 
 import searx.webapp
 import searx.search
@@ -179,6 +181,22 @@ class ViewsTestCase(SearxTestCase):  # pylint: disable=too-many-public-methods
         result = self.client.get('/healthz')
         self.assertEqual(result.status_code, 200)
         self.assertIn(b'OK', result.data)
+
+    def test_captcha_page(self):
+        result = self.client.get('/captcha')
+        self.assertEqual(result.status_code, 200)
+        self.assertIn(b'Captcha not configured.', result.data)
+
+    def test_search_can_return_captcha_response(self):
+        def handle_captcha_mock(*_args):
+            return Response('captcha required', status=403)
+
+        captcha_module = importlib.import_module('searx.captcha')
+        self.setattr4test(captcha_module, 'handle_captcha', handle_captcha_mock)
+
+        result = self.client.post('/search', data={'q': 'test'})
+        self.assertEqual(result.status_code, 403)
+        self.assertEqual(result.data, b'captcha required')
 
     def test_preferences(self):
         result = self.client.get('/preferences')
