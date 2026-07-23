@@ -85,7 +85,7 @@ from searx.webadapter import (
     parse_lang,
 )
 from searx.utils import gen_useragent, dict_subset
-from searx.version import VERSION_STRING, GIT_URL, GIT_BRANCH
+from searx.version import VERSION_STRING, GIT_URL, GIT_BRANCH, FORK_COMMIT, VERSION_STRING_UPSTREAM
 from searx.query import RawTextQuery
 from searx.plugins.oa_doi_rewrite import get_doi_resolver
 from searx.preferences import (
@@ -417,8 +417,9 @@ def render(template_name: str, **kwargs):
     # values from settings
     kwargs['search_formats'] = [x for x in settings['search']['formats'] if x != 'html']
     kwargs['instance_name'] = get_setting('general.instance_name')
-    kwargs['searxng_version'] = VERSION_STRING
-    kwargs['searxng_git_url'] = GIT_URL
+    kwargs['searx_version'] = VERSION_STRING
+    kwargs['searx_version_custom'] = str(VERSION_STRING_UPSTREAM) + " (" + str(FORK_COMMIT) + ")"
+    kwargs['searx_git_url'] = GIT_URL
     kwargs['enable_metrics'] = get_setting('general.enable_metrics')
     kwargs['get_setting'] = get_setting
     kwargs['get_pretty_url'] = get_pretty_url
@@ -599,6 +600,18 @@ def health():
     return Response('OK', mimetype='text/plain')
 
 
+@app.route('/captcha', methods=['GET', 'POST'], endpoint='captcha')
+def captcha_view():
+    from searx.captcha import captcha as captcha_page  # pylint: disable=import-outside-toplevel
+
+    captcha_response = captcha_page(  # pylint: disable=assignment-from-none
+        sxng_request, settings['server']['secret_key']
+    )
+    if captcha_response:
+        return captcha_response
+    return render('captcha.html')
+
+
 @app.route('/client<token>.css', methods=['GET', 'POST'])
 def client_token(token=None):
     link_token.ping(sxng_request, token)
@@ -649,6 +662,14 @@ def search():
         search_query, raw_text_query, _, _, selected_locale = get_search_query_from_webapp(
             sxng_request.preferences, sxng_request.form
         )
+        from searx.captcha import handle_captcha  # pylint: disable=import-outside-toplevel
+
+        captcha_response = handle_captcha(  # pylint: disable=assignment-from-none
+            sxng_request, settings['server']['secret_key'], raw_text_query, search_query, selected_locale
+        )
+        if captcha_response:
+            return captcha_response
+
         search_obj = searx.search.SearchWithPlugins(search_query, sxng_request, sxng_request.user_plugins)
         result_container = search_obj.search()
 
@@ -1286,7 +1307,7 @@ def config():
             'autocomplete': settings['search']['autocomplete'],
             'safe_search': settings['search']['safe_search'],
             'default_theme': settings['ui']['default_theme'],
-            'version': VERSION_STRING,
+            'version': str(VERSION_STRING_UPSTREAM) + " (" + str(FORK_COMMIT) + ")",
             'brand': {
                 'PRIVACYPOLICY_URL': get_setting('general.privacypolicy_url'),
                 'CONTACT_URL': get_setting('general.contact_url'),
