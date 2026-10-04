@@ -122,6 +122,7 @@ import typing as t
 from collections.abc import Callable
 from urllib.parse import urlencode
 
+from curl_cffi import CurlHttpVersion, CurlOpt
 from dateutil import parser
 
 from searx import locales, logger
@@ -207,8 +208,11 @@ def request(query: str, params: dict[str, t.Any]) -> None:
     if brave_category == "goggles":
         args["goggles_id"] = Goggles
 
-    params["headers"]["Accept-Encoding"] = "gzip, deflate"
     params["url"] = f"{base_url}{brave_category}?{urlencode(args)}"
+    params["curl_options"] = {
+        CurlOpt.FORBID_REUSE: 1,
+        CurlOpt.HTTP_VERSION: CurlHttpVersion.V3ONLY,
+    }
     logger.debug("url %s", params["url"])
 
     # set properties in the cookies
@@ -235,25 +239,91 @@ def _extract_published_date(published_date_raw: str | None):
         return None
 
 
+def _js_string_end(text: str, index: int) -> int:
+    quote = text[index]
+    index += 1
+    while True:
+        if text[index] == "\\":
+            index += 2
+            continue
+        if text[index] == quote:
+            return index + 1
+        index += 1
+
+
+def _replace_identifiers(source: str, parameters: list[str], arguments: list[str]) -> str:
+    mapping = dict(zip(parameters, arguments, strict=True))
+    parts: list[str] = []
+    index = 0
+    while index < len(source):
+        if source[index] in "\"'`":
+            end = _js_string_end(source, index)
+            parts.append(source[index:end])
+            index = end
+            continue
+        if source[index].isalpha() or source[index] in "_$":
+            end = index + 1
+            while end < len(source) and (source[end].isalnum() or source[end] in "_$"):
+                end += 1
+            name = source[index:end]
+            is_object_key = source.startswith(":", end)
+            parts.append(mapping[name] if name in mapping and not is_object_key else name)
+            index = end
+            continue
+        parts.append(source[index])
+        index += 1
+    return "".join(parts)
+
+
 def extract_json_data(text: str) -> dict[str, t.Any]:
     # Example script source containing the data:
     #
     # kit.start(app, element, {
-    #    node_ids: [0, 19],
-    #    data: [{type:"data",data: .... ["q","goggles_id"],route:1,url:1}}]
-    #          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    #    node_ids: [0, 37],
+    #    data: [(function(a,b){return {type:"data",data: ....}}("..",".."))]
+    #          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     #    form: null,
     #    error: null
     # });
-    start = text.index("data: [{")
-    newline = text.index("\n", start)
-    end = text.rindex("}}]", start, newline)
-    js_obj_str = "{" + text[start:end] + "}}]}"
-    # js_obj_str = js_obj_str.replace("\xa0", "")  # remove ASCII for &nbsp;
-    # js_obj_str = js_obj_str.replace(r"\u003C", "<").replace(r"\u003c", "<")  # fix broken HTML tags in strings
-    json_str = js_obj_str_to_json_str(js_obj_str)
-    data: dict[str, t.Any] = json.loads(json_str)
-    return data
+    start = text.index("data: [(function")
+    line = text[start : text.index("\n", start)]
+    position = len("data: ")
+    items: list[dict[str, t.Any]] = []
+    while True:
+        while line[position] in " \t,[":
+            position += 1
+        if line[position] == "]":
+            return {"data": items}
+
+        prefix = "(function("
+        parameter_end = line.find(")", position + len(prefix))
+        parameters = [name.strip() for name in line[position + len(prefix) : parameter_end].split(",") if name.strip()]
+        position = line.find("{return ", position) + len("{return ")
+        depth = 0
+        object_start = position
+        while True:
+            if line[position] in "\"'`":
+                position = _js_string_end(line, position)
+                continue
+            if line[position] == "{":
+                depth += 1
+            elif line[position] == "}":
+                depth -= 1
+                if depth == 0:
+                    break
+            position += 1
+        source = line[object_start : position + 1]
+        position += len("}(")
+        arguments: list[str] = []
+        while line[position] != ")":
+            if line[position] in "\"'":
+                end = _js_string_end(line, position)
+                arguments.append(line[position:end])
+                position = end
+            else:
+                position += 1
+        position += len("))")
+        items.append(json.loads(js_obj_str_to_json_str(_replace_identifiers(source, parameters, arguments))))
 
 
 def response(resp: "SXNG_Response") -> EngineResults:
@@ -370,12 +440,6 @@ def _parse_results(parse_func: Callable[..., MainResult | Image], resp: "SXNG_Re
     """Extract json data and loop through result list
     The suppled :py.obj:`parse_func` parses individual result items
     General search / goggle search relies on :py.obj:`_parse_secondary_items` for mixed result-types"""
-    # Example script source containing the data:
-    #
-    # kit.start(app, element, {
-    #    node_ids: [0, 19],
-    #    data: [{type:"data",data: .... ["q","goggles_id"],route:1,url:1}}]
-    #          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     results = EngineResults()
     json_data: dict[str, t.Any] = extract_json_data(resp.text)
     json_resp: dict[str, t.Any] = _get_response_data(json_data, brave_category)
