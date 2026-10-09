@@ -14,6 +14,8 @@ VERSION_TAG: str = "1.0.0"
 DOCKER_TAG: str = "1.0.0"
 GIT_URL: str = "unknown"
 GIT_BRANCH: str = "unknown"
+VERSION_STRING_UPSTREAM: str = "1.0.0"
+FORK_COMMIT: str = "unknown"
 
 logger = logging.getLogger("searx")
 
@@ -74,24 +76,17 @@ def get_git_version() -> tuple[str, str, str]:
     git_version: str = git_commit_date_hash
     docker_tag: str = git_commit_date_hash.replace("+", "-")
 
-    # add "+dirty" suffix if there are uncommitted changes except searx/settings.yml
-    try:
-        subprocess_run("git diff --quiet -- . ':!searx/settings.yml' ':!utils/brand.env'")
-    except subprocess.CalledProcessError as e:
-        if e.returncode == 1:
-            git_version += "+dirty"
-        else:
-            logger.warning('"%s" returns an unexpected return code %i', e.returncode, e.cmd)
-
     return git_version, tag_version, docker_tag
 
 
-def get_information() -> tuple[str, str, str, str, str]:
+def get_information() -> tuple[str, str, str, str, str, str, str]:
     version_string: str = VERSION_STRING
     version_tag: str = VERSION_TAG
     docker_tag: str = DOCKER_TAG
     git_url: str = GIT_URL
     git_branch: str = GIT_BRANCH
+    version_string_upstream: str = VERSION_STRING_UPSTREAM
+    fork_commit: str = FORK_COMMIT
 
     try:
         version_string, version_tag, docker_tag = get_git_version()
@@ -101,21 +96,48 @@ def get_information() -> tuple[str, str, str, str, str]:
         git_url, git_branch = get_git_url_and_branch()
     except subprocess.CalledProcessError as ex:
         logger.error("Error while getting the git URL & branch: %s", ex.stderr)
+    try:
+        version_string_upstream = get_git_version_upstream()
+    except subprocess.CalledProcessError as ex:
+        logger.error("Error while getting the upstream version: %s", ex.stderr)
+    try:
+        fork_commit = get_git_fork_commit()
+    except subprocess.CalledProcessError as ex:
+        logger.error("Error while getting the fork commit: %s", ex.stderr)
 
-    return version_string, version_tag, docker_tag, git_url, git_branch
+    return version_string, version_tag, docker_tag, git_url, git_branch, version_string_upstream, fork_commit
+
+
+def get_git_version_upstream():
+    try:
+        git_commit_date_hash = subprocess_run(r"git show -s --date='format:%-Y.%-m.%-d' --format='%cd+%h' origin/pull")
+        git_version = git_commit_date_hash
+    except subprocess.CalledProcessError:
+        git_commit_date_hash = subprocess_run(r"git show -s --date='format:%-Y.%-m.%-d' --format='%cd+%h'")
+        git_version = git_commit_date_hash
+    return git_version
+
+
+def get_git_fork_commit():
+    git_commit_date_hash = subprocess_run(r"git show -s --format='%h'")
+    return git_commit_date_hash
 
 
 try:
     vf = importlib.import_module('searx.version_frozen')
-    VERSION_STRING, VERSION_TAG, DOCKER_TAG, GIT_URL, GIT_BRANCH = (
+    VERSION_STRING, VERSION_TAG, DOCKER_TAG, GIT_URL, GIT_BRANCH, VERSION_STRING_UPSTREAM, FORK_COMMIT = (
         str(vf.VERSION_STRING),
         str(vf.VERSION_TAG),
         str(vf.DOCKER_TAG),
         str(vf.GIT_URL),
         str(vf.GIT_BRANCH),
+        str(vf.VERSION_STRING_UPSTREAM),
+        str(vf.FORK_COMMIT),
     )
 except ImportError:
-    VERSION_STRING, VERSION_TAG, DOCKER_TAG, GIT_URL, GIT_BRANCH = get_information()
+    VERSION_STRING, VERSION_TAG, DOCKER_TAG, GIT_URL, GIT_BRANCH, VERSION_STRING_UPSTREAM, FORK_COMMIT = (
+        get_information()
+    )
 
 logger.info("version: %s", VERSION_STRING)
 
@@ -123,7 +145,9 @@ if __name__ == "__main__":
     import sys
 
     if len(sys.argv) >= 2 and sys.argv[1] == "freeze":
-        VERSION_STRING, VERSION_TAG, DOCKER_TAG, GIT_URL, GIT_BRANCH = get_information()
+        VERSION_STRING, VERSION_TAG, DOCKER_TAG, GIT_URL, GIT_BRANCH, VERSION_STRING_UPSTREAM, FORK_COMMIT = (
+            get_information()
+        )
 
         # freeze the version (to create an archive outside a git repository)
         python_code = f"""# SPDX-License-Identifier: AGPL-3.0-or-later
@@ -133,6 +157,8 @@ if __name__ == "__main__":
 VERSION_STRING = "{VERSION_STRING}"
 VERSION_TAG = "{VERSION_TAG}"
 DOCKER_TAG = "{DOCKER_TAG}"
+VERSION_STRING_UPSTREAM = "{VERSION_STRING_UPSTREAM}"
+FORK_COMMIT = "{FORK_COMMIT}"
 GIT_URL = "{GIT_URL}"
 GIT_BRANCH = "{GIT_BRANCH}"
 """
@@ -151,6 +177,8 @@ GIT_BRANCH = "{GIT_BRANCH}"
 VERSION_STRING="{VERSION_STRING}"
 VERSION_TAG="{VERSION_TAG}"
 DOCKER_TAG="{DOCKER_TAG}"
+VERSION_STRING_UPSTREAM="{VERSION_STRING_UPSTREAM}"
+FORK_COMMIT="{FORK_COMMIT}"
 GIT_URL="{GIT_URL}"
 GIT_BRANCH="{GIT_BRANCH}"
 """

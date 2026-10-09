@@ -129,7 +129,7 @@ from searx.enginelib.traits import EngineTraits
 from searx.exceptions import SearxEngineResponseException
 from searx.result_types import EngineResults, MainResult, Video
 from searx.result_types.image import Image
-from searx.utils import html_to_text, js_obj_str_to_json_str, js_obj_str_to_python
+from searx.utils import html_to_text, js_obj_str_to_python
 
 if t.TYPE_CHECKING:
     from searx.extended_types import SXNG_Response
@@ -140,7 +140,7 @@ about = {
     "official_api_documentation": None,
     "use_official_api": False,
     "require_api_key": False,
-    "results": "HTML",
+    "results": "JSON",
 }
 
 base_url = "https://search.brave.com/"
@@ -207,8 +207,7 @@ def request(query: str, params: dict[str, t.Any]) -> None:
     if brave_category == "goggles":
         args["goggles_id"] = Goggles
 
-    params["headers"]["Accept-Encoding"] = "gzip, deflate"
-    params["url"] = f"{base_url}{brave_category}?{urlencode(args)}"
+    params["url"] = f"{base_url}{brave_category}/__data.json?{urlencode(args)}"
     logger.debug("url %s", params["url"])
 
     # set properties in the cookies
@@ -236,23 +235,85 @@ def _extract_published_date(published_date_raw: str | None):
 
 
 def extract_json_data(text: str) -> dict[str, t.Any]:
-    # Example script source containing the data:
-    #
-    # kit.start(app, element, {
-    #    node_ids: [0, 19],
-    #    data: [{type:"data",data: .... ["q","goggles_id"],route:1,url:1}}]
-    #          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    #    form: null,
-    #    error: null
-    # });
-    start = text.index("data: [{")
-    newline = text.index("\n", start)
-    end = text.rindex("}}]", start, newline)
-    js_obj_str = "{" + text[start:end] + "}}]}"
-    # js_obj_str = js_obj_str.replace("\xa0", "")  # remove ASCII for &nbsp;
-    # js_obj_str = js_obj_str.replace(r"\u003C", "<").replace(r"\u003c", "<")  # fix broken HTML tags in strings
-    json_str = js_obj_str_to_json_str(js_obj_str)
-    data: dict[str, t.Any] = json.loads(json_str)
+    """Decode the page data returned by SvelteKit's ``__data.json`` endpoint.
+
+    SvelteKit serializes each route node as a flattened array.  Dictionaries and
+    lists contain indexes into that array instead of their values.  Brave's
+    rendered HTML contains the same data wrapped in JavaScript IIFEs, which is
+    both more brittle and unsafe to evaluate.
+    """
+    try:
+        payload = json.loads(text)
+        nodes = payload["nodes"]
+    except (json.JSONDecodeError, KeyError, TypeError) as e:
+        raise SearxEngineResponseException("Unexpected Brave SvelteKit response") from e
+
+    if not isinstance(nodes, list):
+        raise SearxEngineResponseException("Brave SvelteKit response has no route nodes")
+
+    node_data = next(
+        (
+            node["data"]
+            for node in reversed(nodes)
+            if isinstance(node, dict)
+            and isinstance(node.get("data"), list)
+            and node["data"]
+            and isinstance(node["data"][0], dict)
+            and ("body" in node["data"][0] or "response" in node["data"][0])
+        ),
+        None,
+    )
+    if node_data is None:
+        raise SearxEngineResponseException("Brave SvelteKit response has no page data")
+
+    cache: dict[int, t.Any] = {}
+    special_values = {
+        -1: None,  # undefined
+        -2: None,  # array hole
+        -3: float("nan"),
+        -4: float("inf"),
+        -5: float("-inf"),
+        -6: -0.0,
+    }
+
+    def unflatten(index: int) -> t.Any:
+        if not isinstance(index, int):
+            raise SearxEngineResponseException(f"Invalid Brave SvelteKit reference {index!r}")
+        if index < 0:
+            try:
+                return special_values[index]
+            except KeyError as e:
+                raise SearxEngineResponseException(f"Unsupported Brave SvelteKit value {index}") from e
+
+        if index in cache:
+            return cache[index]
+
+        try:
+            value = node_data[index]
+        except IndexError as e:
+            raise SearxEngineResponseException(f"Invalid Brave SvelteKit reference {index}") from e
+
+        if isinstance(value, dict):
+            result: dict[str, t.Any] = {}
+            cache[index] = result
+            for key, reference in value.items():
+                result[key] = unflatten(reference)
+            return result
+
+        if isinstance(value, list):
+            if value and isinstance(value[0], str):
+                raise SearxEngineResponseException(f"Unsupported Brave SvelteKit type {value[0]!r}")
+            result_list: list[t.Any] = []
+            cache[index] = result_list
+            result_list.extend(unflatten(reference) for reference in value)
+            return result_list
+
+        cache[index] = value
+        return value
+
+    data = unflatten(0)
+    if not isinstance(data, dict):
+        raise SearxEngineResponseException("Unexpected Brave SvelteKit page data")
     return data
 
 
@@ -285,9 +346,9 @@ def parse_search_result(result: dict[str, t.Any]) -> MainResult:
     )
 
 
-def _parse_secondary_items(json_data: dict[str, t.Any], results: EngineResults):
+def _parse_secondary_items(page_data: dict[str, t.Any], results: EngineResults):
     # video results utilize same schema as video search -> re-use _parse_video_result
-    body_resp: dict[str, t.Any] = _get_response_data(json_data)
+    body_resp: dict[str, t.Any] = _get_response_data(page_data)
     videos_resp: dict[str, t.Any] = body_resp.get("videos", {})
     if videos_resp and "results" in videos_resp:
         for result in videos_resp.get("results", []):
@@ -343,21 +404,19 @@ def parse_video_result(result: dict[str, t.Any]) -> Video:
     )
 
 
-def _get_response_data(json_data: dict[str, t.Any], category: str | None = None) -> dict[str, t.Any]:
-    """Navigate the Brave embedded JSON to the category-specific response object."""
+def _get_response_data(page_data: dict[str, t.Any], category: str | None = None) -> dict[str, t.Any]:
+    """Navigate the Brave page data to the category-specific response object."""
     # Brave’s structure is mostly consistent but has a couple of quirks:
-    # - most categories live under data[1].data.body.response.<category>
+    # - most categories live under body.response.<category>
     # - news omits the intermediate "body" key
     try:
-        data: dict[str, t.Any] = json_data["data"][1]["data"]
-
-        if data.get("noResults"):  # Boolean Value
+        if page_data.get("noResults"):  # Boolean Value
             return {}
 
         if category == "news":
-            return data["response"]["news"]
+            return page_data["response"]["news"]
 
-        body_resp = data["body"]["response"]
+        body_resp = page_data["body"]["response"]
         if category in ("search", "goggles"):
             return body_resp["web"]
         # images / videos / secondary items
@@ -370,15 +429,9 @@ def _parse_results(parse_func: Callable[..., MainResult | Image], resp: "SXNG_Re
     """Extract json data and loop through result list
     The suppled :py.obj:`parse_func` parses individual result items
     General search / goggle search relies on :py.obj:`_parse_secondary_items` for mixed result-types"""
-    # Example script source containing the data:
-    #
-    # kit.start(app, element, {
-    #    node_ids: [0, 19],
-    #    data: [{type:"data",data: .... ["q","goggles_id"],route:1,url:1}}]
-    #          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     results = EngineResults()
-    json_data: dict[str, t.Any] = extract_json_data(resp.text)
-    json_resp: dict[str, t.Any] = _get_response_data(json_data, brave_category)
+    page_data: dict[str, t.Any] = extract_json_data(resp.text)
+    json_resp: dict[str, t.Any] = _get_response_data(page_data, brave_category)
     if not json_resp:
         # if _get_response_data returns {} - indicates it was parsed successfully but had "noResults" = True
         return results
@@ -389,7 +442,7 @@ def _parse_results(parse_func: Callable[..., MainResult | Image], resp: "SXNG_Re
 
     # general search / goggle might have secondary items
     if brave_category in ("search", "goggles"):
-        _parse_secondary_items(json_data, results)
+        _parse_secondary_items(page_data, results)
 
     return results
 
