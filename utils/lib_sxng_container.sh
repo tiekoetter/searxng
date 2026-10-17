@@ -231,6 +231,10 @@ container.push() {
 
         podman image list
 
+        # Remote registries
+        release_registries=("ghcr.io")
+
+        # Push manifests
         for registry in "${release_registries[@]}"; do
             for tag in "${release_tags[@]}"; do
                 build_msg CONTAINER "Pushing manifest $tag to $registry"
